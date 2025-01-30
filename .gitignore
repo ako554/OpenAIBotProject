@@ -1,5 +1,6 @@
 # Ignorer les fichiers sensibles
 key.env
+.env
 
 # Ignorer les fichiers zip
 *.zip
@@ -10,8 +11,10 @@ key.env
 # Dossiers temporaires Python
 __pycache__/
 *.pyc
+
 # Ignorer les fichiers PyCharm/JetBrains
 .idea/
 
+# Ignorer l'environnement virtuel
 venv/
-.DS_Store
+

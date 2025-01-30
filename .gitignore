@@ -1,0 +1,17 @@
+# Ignorer les fichiers sensibles
+key.env
+
+# Ignorer les fichiers zip
+*.zip
+
+# Fichiers système macOS
+.DS_Store
+
+# Dossiers temporaires Python
+__pycache__/
+*.pyc
+# Ignorer les fichiers PyCharm/JetBrains
+.idea/
+
+venv/
+.DS_Store

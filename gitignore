@@ -1,0 +1,24 @@
+# Fichiers et dossiers Python à ignorer
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Fichiers de logs et archives
+*.log
+*.zip
+*.tar.gz
+
+# Fichiers système macOS à ignorer
+.DS_Store
+
+# Ignorer l'environnement virtuel Python
+venv/
+
+# Ignorer les fichiers de configuration locaux et sensibles
+*.env
+key.env
+secrets.json
+config.json
+.env.local
+

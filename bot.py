@@ -1,28 +1,41 @@
 import openai
 import os
 import time
+from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
-# Charger les variables d'environnement depuis key.env
+# Charger les variables d'environnement
 load_dotenv("key.env")
 
-# Récupérer la clé API
+# Récupérer la clé API OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ASSISTANT_ID = "asst_KjtbsY41MGXV5nMzlHGJc6tc"  # Remplace par ton ID correct
+ASSISTANT_ID = "asst_KjtbsY41MGXV5nMzlHGJc6tc"
 
-# Vérifier si la clé API est bien chargée
+# Vérifier si la clé API est bien définie
 if not OPENAI_API_KEY:
     raise ValueError("❌ ERREUR : La clé API OpenAI n'est pas définie dans key.env")
 
 # Créer un client OpenAI
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# Réutiliser un thread existant pour accélérer les échanges
+# Réutiliser un thread pour l'optimisation
 THREAD_ID = None
 
-def interroger_assistant(message):
-    """Envoie un message à l'Assistant API et retourne la réponse."""
+# Initialiser Flask
+app = Flask(__name__)
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    """Route API pour interroger l'assistant"""
     global THREAD_ID
+
+    # Vérifier si un message est bien envoyé
+    data = request.get_json()
+    user_message = data.get("message", "")
+
+    if not user_message:
+        return jsonify({"error": "Message vide"}), 400
+
     try:
         # Créer un thread unique si nécessaire
         if THREAD_ID is None:
@@ -32,7 +45,7 @@ def interroger_assistant(message):
         client.beta.threads.messages.create(
             thread_id=THREAD_ID,
             role="user",
-            content=message
+            content=user_message
         )
 
         # Lancer l'exécution de l'assistant
@@ -48,26 +61,19 @@ def interroger_assistant(message):
                 break
             time.sleep(0.3)  # Vérification toutes les 300ms
 
-        # Récupérer et retourner la réponse
+        # Récupérer la réponse
         messages = client.beta.threads.messages.list(thread_id=THREAD_ID)
         if messages.data:
             first_message = messages.data[0]
             if first_message.content and isinstance(first_message.content, list):
-                return " ".join(block.text.value for block in first_message.content if hasattr(block, "text"))
+                response_text = " ".join(block.text.value for block in first_message.content if hasattr(block, "text"))
+                return jsonify({"response": response_text})
 
-        return "❌ Aucune réponse reçue."
+        return jsonify({"error": "Aucune réponse reçue"}), 500
 
     except openai.OpenAIError as e:
-        return f"❌ Erreur OpenAI: {e}"
+        return jsonify({"error": str(e)}), 500
 
+# Lancer le serveur Flask sur Render
 if __name__ == "__main__":
-    print("🤖 Chatbot OpenAI Assistant (Tape 'exit' pour quitter)")
-
-    while True:
-        user_input = input("Toi: ")
-        if user_input.lower() in ["exit", "quit", "stop"]:
-            print("Bot: À bientôt ! 👋")
-            break
-
-        response = interroger_assistant(user_input)
-        print(f"Bot: {response}")
+    app.run(host="0.0.0.0", port=10000)

@@ -63,17 +63,22 @@ def chat():
 
         # Récupérer la réponse
         messages = client.beta.threads.messages.list(thread_id=THREAD_ID)
+
         if messages.data:
             first_message = messages.data[0]
-            if first_message.content and isinstance(first_message.content, list):
-                response_text = " ".join(block.text.value for block in first_message.content if hasattr(block, "text"))
-                return jsonify({"response": response_text})
+            if hasattr(first_message, "content"):
+                content_blocks = first_message.content
+                if isinstance(content_blocks, list):
+                    response_text = " ".join(block.text.value for block in content_blocks if hasattr(block, "text"))
+                    return jsonify({"response": response_text})
 
         return jsonify({"error": "Aucune réponse reçue"}), 500
 
     except openai.OpenAIError as e:
+        print(f"❌ Erreur OpenAI: {e}")
         return jsonify({"error": str(e)}), 500
 
-# Lancer le serveur Flask sur Render
+# Lancer le serveur Flask en production avec Render
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))  # Utilise 10000 par défaut ou une valeur dynamique
+    app.run(host="0.0.0.0", port=port)

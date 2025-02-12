@@ -1,3 +1,4 @@
+# Mise à jour pour Render
 import openai
 import os
 import time

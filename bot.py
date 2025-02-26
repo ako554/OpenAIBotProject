@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS  # Ajout de Flask-CORS
 import openai
 import os
 import time
@@ -11,6 +12,7 @@ openai.api_key = api_key
 assistant_id = "asst_KjtbsY41MGXV5nMzlHGJc6tc"
 
 app = Flask(__name__)
+CORS(app)  # Autorise toutes les origines (modifier pour plus de sécurité)
 
 @app.route("/", methods=["GET"])
 def home():
@@ -66,5 +68,5 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    # Configuration pour Render
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5001)))
+    PORT = int(os.environ.get("PORT", 5001))  # Utilise 5001 par défaut
+    app.run(host="0.0.0.0", port=PORT)

@@ -3,6 +3,7 @@ from flask_cors import CORS
 import openai
 import os
 import time
+import concurrent.futures  # Pour exécuter les requêtes OpenAI en parallèle
 
 # Configuration
 api_key = os.getenv("OPENAI_API_KEY")
@@ -12,78 +13,63 @@ assistant_id = "asst_KjtbsY41MGXV5nMzlHGJc6tc"
 app = Flask(__name__)
 CORS(app)  # Autorise toutes les origines (modifier pour plus de sécurité en production)
 
+# Utilisation d'un ThreadPool pour exécuter OpenAI sans bloquer Flask
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
-def get_openai_response(message):
+def get_openai_response(message, max_wait_time=15):
+    """
+    Exécute la requête OpenAI en parallèle sans bloquer Flask.
+    """
     start_time = time.time()
-    print(f"Début de la requête à {time.strftime('%H:%M:%S', time.localtime(start_time))}")
 
-    # Créer le thread
-    thread_start = time.time()
     try:
+        # Étape 1 : Créer un thread OpenAI
         thread = openai.beta.threads.create(
             messages=[{"role": "user", "content": message}]
         )
-    except Exception as e:
-        print(f"Erreur lors de la création du thread : {str(e)}")
-        raise
-    print(f"Création thread : {time.time() - thread_start:.2f} secondes")
+        thread_id = thread.id
 
-    thread_id = thread.id
-
-    # Lancer le run
-    run_start = time.time()
-    try:
+        # Étape 2 : Lancer un run
         run = openai.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=assistant_id
         )
-    except Exception as e:
-        print(f"Erreur lors du lancement du run : {str(e)}")
-        raise
-    print(f"Lancement run : {time.time() - run_start:.2f} secondes")
+        run_id = run.id
 
-    run_id = run.id
+        # Étape 3 : Attente non bloquante avec timeout progressif
+        sleep_time = 0.3  # Commence par 0.3s pour accélérer l’attente
+        elapsed_time = 0
 
-    # Attente optimisée du statut avec délai et timeout strict
-    max_attempts = 6  # 6 tentatives (3 secondes max avec sleep(0.5))
-    attempt = 0
-    while attempt < max_attempts:
-        check_start = time.time()
-        try:
+        while elapsed_time < max_wait_time:
             run_status = openai.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-        except Exception as e:
-            print(f"Erreur lors de la vérification du statut : {str(e)}")
-            raise
-        print(f"Vérification statut (tentative {attempt + 1}) : {time.time() - check_start:.2f} secondes")
-        if run_status.status == "completed":
-            break
-        time.sleep(0.5)  # Délai maintenu à 0.5 seconde
-        attempt += 1
 
-    if attempt >= max_attempts:
-        raise TimeoutError("Délai maximum atteint (3 secondes)")
+            if run_status.status == "completed":
+                break  # Sortie immédiate dès que c'est prêt
 
-    print(f"Temps total d'attente du statut : {time.time() - start_time:.2f} secondes")
+            time.sleep(sleep_time)
+            elapsed_time = time.time() - start_time
 
-    # Récupérer les messages (avec timeout explicite)
-    messages_start = time.time()
-    try:
-        messages = openai.beta.threads.messages.list(thread_id=thread_id, timeout=5)  # Timeout de 5 secondes
+            # Augmente progressivement le délai d’attente (max 2s)
+            sleep_time = min(sleep_time * 1.5, 2)
+
+        if elapsed_time >= max_wait_time:
+            return "⏳ Temps d’attente dépassé, réessayez plus tard."
+
+        # Étape 4 : Récupérer les messages OpenAI
+        messages = openai.beta.threads.messages.list(thread_id=thread_id)
+
+        # Extraction de la réponse
+        assistant_response = next(
+            (msg.content[0].text.value for msg in messages if msg.role == "assistant"),
+            "⚠️ L'assistant n'a pas fourni de réponse."
+        )
+
+        return assistant_response.replace("\\n", "\n").replace('\\"', '"')
+
+    except openai.OpenAIError as e:
+        return f"❌ Erreur OpenAI : {str(e)}"
     except Exception as e:
-        print(f"Erreur lors de la récupération des messages : {str(e)}")
-        raise
-    print(f"Récupération messages : {time.time() - messages_start:.2f} secondes")
-
-    # Extraction réponse
-    assistant_response = next(
-        (msg.content[0].text.value for msg in messages if msg.role == "assistant"),
-        "L'assistant n'a pas fourni de réponse."
-    )
-
-    total_time = time.time() - start_time
-    print(f"Temps total de la requête : {total_time:.2f} secondes")
-
-    return assistant_response.replace("\\n", "\n").replace('\\"', '"')
+        return f"❌ Erreur inconnue : {str(e)}"
 
 
 @app.route("/", methods=["GET"])
@@ -96,19 +82,20 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    """Gère les requêtes POST pour interagir avec l'assistant OpenAI en parallèle."""
     data = request.get_json()
-    message = data.get("message", "")
+    message = data.get("message", "").strip()
 
     if not message:
-        return jsonify({"error": "Message vide"}), 400
+        return jsonify({"error": "⚠️ Message vide"}), 400
 
-    try:
-        response = get_openai_response(message)
-        return jsonify({"response": response})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # Lancement de la requête OpenAI en parallèle (Flask ne sera pas bloqué)
+    future = executor.submit(get_openai_response, message)
+    response = future.result()  # Attente non bloquante
+
+    return jsonify({"response": response})
 
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5001))
-    app.run(host="0.0.0.0", port=PORT)
+    app.run(host="0.0.0.0", port=PORT, threaded=True)  # Mode multithread activé

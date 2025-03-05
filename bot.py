@@ -8,7 +8,7 @@ import concurrent.futures  # Pour exécuter les requêtes OpenAI en parallèle
 # Configuration
 api_key = os.getenv("OPENAI_API_KEY")
 openai.api_key = api_key
-assistant_id = "asst_KjtbsY41MGXV5nMzlHGJc6tc"
+assistant_id = "asst_oFDIqZw8UyPvvmPZfCzZMWc1"
 
 app = Flask(__name__)
 CORS(app)  # Autorise toutes les origines (modifier pour plus de sécurité en production)
